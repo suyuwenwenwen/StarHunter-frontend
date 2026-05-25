@@ -3,6 +3,11 @@ import { useState, FormEvent, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 // ==========================================
+// 全局 API 地址配置 (支持本地与云端部署)
+// ==========================================
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// ==========================================
 // 极简单色 SVG 图标库
 // ==========================================
 const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
@@ -10,7 +15,7 @@ const BriefcaseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" h
 const UploadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
-const SparkleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1-1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>;
+const SparkleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>;
 const BackIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
 const MinusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/></svg>;
@@ -42,7 +47,8 @@ export default function Home() {
     setIsLoading(true); setStatusText("正在解析简历框架...");
     const formData = new FormData(); formData.append("file", file);
     try {
-      const res = await fetch("http://localhost:8000/api/extract", { method: "POST", body: formData });
+      // ✅ 使用了动态 API_BASE
+      const res = await fetch(`${API_BASE}/api/extract`, { method: "POST", body: formData });
       const { data } = await res.json();
       setResumeData(data); setStatusText("正在生成基础排版..."); await compilePdf(data);
     } catch (err) { console.error(err); }
@@ -54,7 +60,8 @@ export default function Home() {
     setCurrentView('c_workspace');
     setIsLoading(true); setStatusText("AI 导师正在进行深度阅卷...");
     try {
-      const res = await fetch("http://localhost:8000/api/diagnose", {
+      // ✅ 使用了动态 API_BASE
+      const res = await fetch(`${API_BASE}/api/diagnose`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: [], resume_data: resumeData, jd_input: jd })
       });
@@ -65,7 +72,8 @@ export default function Home() {
 
   const compilePdf = async (data: any) => {
     try {
-      const res = await fetch("http://localhost:8000/api/compile", {
+      // ✅ 使用了动态 API_BASE
+      const res = await fetch(`${API_BASE}/api/compile`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resume_data: data })
       });
       const { pdf_base64 } = await res.json(); setPdfBase64(pdf_base64);
@@ -78,7 +86,8 @@ export default function Home() {
     setMessages(newMsgs); setInput("");
     setIsLoading(true); setStatusText("正在注入策略并重绘排版...");
     try {
-      const res = await fetch("http://localhost:8000/api/chat", {
+      // ✅ 使用了动态 API_BASE
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMsgs, resume_data: resumeData, jd_input: jd })
       });
@@ -103,7 +112,8 @@ export default function Home() {
     const formData = new FormData(); formData.append("jd", jd);
     bFiles.forEach(file => formData.append("files", file));
     try {
-      const res = await fetch("http://localhost:8000/api/hr/batch-evaluate", { method: "POST", body: formData });
+      // ✅ 使用了动态 API_BASE
+      const res = await fetch(`${API_BASE}/api/hr/batch-evaluate`, { method: "POST", body: formData });
       const data = await res.json(); setBCandidates(data.candidates);
     } catch (err) { console.error(err); }
     setIsLoading(false); setStatusText("");
@@ -167,9 +177,6 @@ export default function Home() {
     );
   }
 
-  // ==========================================
-  // B端 工作台 (扩宽视野，上下堆叠，红底减分条)
-  // ==========================================
   if (currentView === 'b_workspace') {
     return (
       <main className="h-screen flex flex-col bg-[#f8f9fa] overflow-hidden">
@@ -242,7 +249,6 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* 🔥 全新上下堆叠布局：核心加分与硬核扣分条 */}
                     <div className="flex flex-col gap-6 mt-auto">
                       <div className="bg-[var(--primary)]/5 rounded-xl p-6 border border-[var(--primary)]/10">
                         <div className="flex items-center gap-2 mb-4 text-[var(--primary)] font-bold text-sm uppercase tracking-widest">
@@ -257,7 +263,6 @@ export default function Home() {
                         </ul>
                       </div>
                       
-                      {/* 🔥 扣分项 (带具体分值的红底打分条) */}
                       {candidate.deductions && candidate.deductions.length > 0 && (
                         <div className="bg-red-50/50 rounded-xl p-6 border border-red-100">
                           <div className="flex items-center gap-2 mb-4 text-red-600 font-bold text-sm uppercase tracking-widest">
@@ -289,9 +294,6 @@ export default function Home() {
     );
   }
 
-  // ==========================================
-  // C端 工作台 (样式和原版一模一样，只提升字体和内边距)
-  // ==========================================
   return (
     <main className="h-screen flex flex-col bg-[var(--bg-app)] overflow-hidden">
       <header className="flex-none h-16 border-b border-[var(--border-color)] bg-[var(--surface)] flex items-center justify-between px-6 shrink-0">
