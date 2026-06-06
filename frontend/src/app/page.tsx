@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 // 全局 API 地址配置
 // ==========================================
 // const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_BASE = 'https://starhunter-api-xxxx.onrender.com'; // ⚠️ 注意：这里记得填回你真实的 Render 地址，不要结尾斜杠！
+const API_BASE = 'https://starhunter-backend.onrender.com'; // ⚠️ 注意：这里记得填回你真实的 Render 地址，不要结尾斜杠！
 
 // ==========================================
 // 极简单色 SVG 图标库
