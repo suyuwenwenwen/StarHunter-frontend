@@ -3,9 +3,10 @@ import { useState, FormEvent, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 // ==========================================
-// 全局 API 地址配置 (支持本地与云端部署)
+// 全局 API 地址配置
 // ==========================================
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = 'https://starhunter-api-xxxx.onrender.com'; // ⚠️ 注意：这里记得填回你真实的 Render 地址，不要结尾斜杠！
 
 // ==========================================
 // 极简单色 SVG 图标库
@@ -19,6 +20,7 @@ const SparkleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" hei
 const BackIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
 const MinusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/></svg>;
+const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<'landing' | 'c_input' | 'c_workspace' | 'b_input' | 'b_workspace'>('landing');
@@ -36,6 +38,17 @@ export default function Home() {
   const [bFiles, setBFiles] = useState<File[]>([]);
   const [bCandidates, setBCandidates] = useState<any[]>([]);
 
+  // 🌟 B端核心新功能：动态评价维度状态
+  const [dimensions, setDimensions] = useState([
+    { id: 1, name: "院校背景与学术基础", weight: 35 },
+    { id: 2, name: "实习经历含金量", weight: 30 },
+    { id: 3, name: "项目实战与竞赛", weight: 20 },
+    { id: 4, name: "通用技能与综合素质", weight: 15 }
+  ]);
+
+  const totalWeight = dimensions.reduce((sum, dim) => sum + (Number(dim.weight) || 0), 0);
+  const isWeightValid = totalWeight === 100;
+
   useEffect(() => {
     if (currentView === 'c_workspace') messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentView]);
@@ -47,7 +60,6 @@ export default function Home() {
     setIsLoading(true); setStatusText("正在解析简历框架...");
     const formData = new FormData(); formData.append("file", file);
     try {
-      // ✅ 使用了动态 API_BASE
       const res = await fetch(`${API_BASE}/api/extract`, { method: "POST", body: formData });
       const { data } = await res.json();
       setResumeData(data); setStatusText("正在生成基础排版..."); await compilePdf(data);
@@ -60,7 +72,6 @@ export default function Home() {
     setCurrentView('c_workspace');
     setIsLoading(true); setStatusText("AI 导师正在进行深度阅卷...");
     try {
-      // ✅ 使用了动态 API_BASE
       const res = await fetch(`${API_BASE}/api/diagnose`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: [], resume_data: resumeData, jd_input: jd })
@@ -72,7 +83,6 @@ export default function Home() {
 
   const compilePdf = async (data: any) => {
     try {
-      // ✅ 使用了动态 API_BASE
       const res = await fetch(`${API_BASE}/api/compile`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resume_data: data })
       });
@@ -86,7 +96,6 @@ export default function Home() {
     setMessages(newMsgs); setInput("");
     setIsLoading(true); setStatusText("正在注入策略并重绘排版...");
     try {
-      // ✅ 使用了动态 API_BASE
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMsgs, resume_data: resumeData, jd_input: jd })
@@ -106,19 +115,25 @@ export default function Home() {
   };
 
   const startBEvaluate = async () => {
-    if (!jd || bFiles.length === 0) return;
+    if (!jd || bFiles.length === 0 || !isWeightValid) return;
     setCurrentView('b_workspace');
-    setIsLoading(true); setStatusText(`正在多维评估 ${bFiles.length} 份候选人简历...`);
-    const formData = new FormData(); formData.append("jd", jd);
+    setIsLoading(true); setStatusText(`正在基于您的专属框架，评估 ${bFiles.length} 份候选人简历...`);
+    const formData = new FormData(); 
+    formData.append("jd", jd);
+    // 🌟 将自定义的维度数组转为 JSON 字符串发送给后端
+    formData.append("dimensions", JSON.stringify(dimensions));
     bFiles.forEach(file => formData.append("files", file));
+    
     try {
-      // ✅ 使用了动态 API_BASE
       const res = await fetch(`${API_BASE}/api/hr/batch-evaluate`, { method: "POST", body: formData });
       const data = await res.json(); setBCandidates(data.candidates);
     } catch (err) { console.error(err); }
     setIsLoading(false); setStatusText("");
   };
 
+  // ==========================================
+  // Render
+  // ==========================================
   if (currentView === 'landing') {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center relative overflow-x-hidden bg-[var(--bg-app)] py-20">
@@ -136,7 +151,7 @@ export default function Home() {
           <button onClick={() => setCurrentView('b_input')} className="flex-1 text-left p-8 rounded-2xl bg-[var(--surface)] border border-[var(--border-color)] hover:border-[var(--primary)]/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
             <div className="w-12 h-12 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center mb-6 group-hover:bg-[var(--primary)] group-hover:text-white transition-colors"><BriefcaseIcon /></div>
             <h2 className="text-2xl font-bold mb-2">HR 筛选中心</h2>
-            <p className="text-[var(--text-muted)]">简历批量导入与解析<br/>根据岗位 JD 自动量化打分</p>
+            <p className="text-[var(--text-muted)]">专属维度定制配置<br/>海量简历一键量化打分</p>
           </button>
         </div>
       </main>
@@ -150,17 +165,80 @@ export default function Home() {
         <button onClick={() => setCurrentView('landing')} className="absolute top-8 left-8 flex items-center gap-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors z-20"><BackIcon /> 返回首页</button>
         <div className="w-full max-w-3xl z-10 flex flex-col gap-8">
           <div className="text-center mb-4">
-            <h1 className="text-3xl font-bold text-[var(--text-main)] mb-2">{isB ? "B端：企业批量筛选引擎" : "C端：配置求职诊断环境"}</h1>
-            <p className="text-lg text-[var(--text-muted)]">{isB ? "输入招聘 JD，并批量上传候选人简历，系统将自动进行量化评估。" : "输入目标 JD 并上传您的原版简历，唤醒 StarHunter 精修引擎。"}</p>
+            <h1 className="text-3xl font-bold text-[var(--text-main)] mb-2">{isB ? "B端：配置您的专属评价模型" : "C端：配置求职诊断环境"}</h1>
+            <p className="text-lg text-[var(--text-muted)]">{isB ? "定制打分权重并上传简历，AI 将基于您的偏好自动完成评估。" : "输入目标 JD 并上传您的原版简历，唤醒 StarHunter 精修引擎。"}</p>
           </div>
-          <div className="bg-[var(--surface)] p-8 rounded-3xl shadow-sm border border-[var(--border-color)] flex flex-col gap-6">
+          
+          <div className="bg-[var(--surface)] p-8 rounded-3xl shadow-sm border border-[var(--border-color)] flex flex-col gap-8">
+            
+            {/* 1. JD 输入区 */}
             <div>
               <label className="block text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">{isB ? "Enterprise JD" : "Target Job Description"}</label>
-              <textarea className="w-full p-5 rounded-xl border border-[var(--border-color)] bg-transparent focus:bg-gray-50 focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10 transition-all resize-none text-base leading-relaxed" rows={6} placeholder="在此粘贴目标岗位的职责与要求..." value={jd} onChange={(e) => setJd(e.target.value)} />
+              <textarea className="w-full p-5 rounded-xl border border-[var(--border-color)] bg-transparent focus:bg-gray-50 focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10 transition-all resize-none text-base leading-relaxed" rows={4} placeholder="在此粘贴目标岗位的职责与要求..." value={jd} onChange={(e) => setJd(e.target.value)} />
             </div>
+
+            {/* 🌟 2. B端专属：动态权重调参台 */}
+            {isB && (
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-semibold text-[var(--text-main)] uppercase tracking-wider">
+                    自定义打分维度与权重
+                  </label>
+                  <span className={`text-sm font-bold px-3 py-1 rounded-full ${isWeightValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                    总权重: {totalWeight}% {isWeightValid ? '✅' : '❌ 须等于100'}
+                  </span>
+                </div>
+                
+                <div className="flex flex-col gap-3">
+                  {dimensions.map((dim, idx) => (
+                    <div key={dim.id} className="flex items-center gap-3">
+                      <input 
+                        type="text" 
+                        value={dim.name} 
+                        onChange={(e) => {
+                          const newDims = [...dimensions];
+                          newDims[idx].name = e.target.value;
+                          setDimensions(newDims);
+                        }}
+                        placeholder="维度名称 (如: 业务理解力)"
+                        className="flex-1 p-3 rounded-lg border border-gray-300 focus:border-gray-900 focus:ring-1 focus:ring-gray-900 text-sm"
+                      />
+                      <div className="relative w-24 shrink-0">
+                        <input 
+                          type="number" 
+                          value={dim.weight} 
+                          onChange={(e) => {
+                            const newDims = [...dimensions];
+                            newDims[idx].weight = parseInt(e.target.value) || 0;
+                            setDimensions(newDims);
+                          }}
+                          className="w-full p-3 pr-8 rounded-lg border border-gray-300 focus:border-gray-900 focus:ring-1 focus:ring-gray-900 text-sm font-bold text-center"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">%</span>
+                      </div>
+                      <button 
+                        onClick={() => setDimensions(dimensions.filter(d => d.id !== dim.id))}
+                        className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <button 
+                    onClick={() => setDimensions([...dimensions, { id: Date.now(), name: "新增评估维度", weight: 10 }])}
+                    className="mt-2 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 text-gray-500 hover:border-gray-900 hover:text-gray-900 rounded-xl transition-all text-sm font-bold uppercase tracking-wider"
+                  >
+                    <PlusIcon /> 添加新维度
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 3. 文件上传区 */}
             <div className="flex flex-col gap-3">
               <label className="block text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">{isB ? "Candidate Resumes (Batch PDF)" : "Source Resume (Single PDF)"}</label>
-              <label className="w-full flex flex-col items-center justify-center gap-4 p-10 rounded-xl border-2 border-dashed border-gray-200 hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 cursor-pointer transition-all bg-gray-50">
+              <label className="w-full flex flex-col items-center justify-center gap-4 p-10 rounded-xl border-2 border-dashed border-gray-200 hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 cursor-pointer transition-all bg-white">
                 <div className="p-4 bg-[var(--surface)] shadow-sm rounded-full text-[var(--text-main)]">{isB ? <BriefcaseIcon/> : <UploadIcon/>}</div>
                 <span className="text-base font-medium text-[var(--text-main)] text-center">
                   {isB ? (bFiles.length > 0 ? `已成功挂载 ${bFiles.length} 份候选人简历` : "点击批量选择多个候选人 PDF 简历") : (cFileName ? `已加载：${cFileName}` : "点击或拖拽上传一份 PDF 简历")}
@@ -168,7 +246,13 @@ export default function Home() {
                 <input type="file" accept="application/pdf" multiple={isB} className="hidden" onChange={isB ? handleBFileUpload : handleCFileUpload} />
               </label>
             </div>
-            <button onClick={isB ? startBEvaluate : startCDiagnose} disabled={!jd || (isB ? bFiles.length === 0 : Object.keys(resumeData).length === 0) || isLoading} className={`mt-2 w-full flex items-center justify-center gap-2 py-4 text-white text-lg font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg ${isB ? 'bg-gray-900 shadow-black/10' : 'bg-[var(--primary)] shadow-[var(--primary)]/20'}`}>
+            
+            {/* 4. 提交大按钮 */}
+            <button 
+              onClick={isB ? startBEvaluate : startCDiagnose} 
+              disabled={!jd || (isB ? (bFiles.length === 0 || !isWeightValid) : Object.keys(resumeData).length === 0) || isLoading} 
+              className={`mt-2 w-full flex items-center justify-center gap-2 py-4 text-white text-lg font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg ${isB ? 'bg-gray-900 shadow-black/10' : 'bg-[var(--primary)] shadow-[var(--primary)]/20'}`}
+            >
               {isLoading ? <span className="animate-pulse">{statusText}</span> : <>{isB ? <BriefcaseIcon /> : <SparkleIcon />} {isB ? "开启多维批量评估" : "开启深度诊断"}</>}
             </button>
           </div>
@@ -177,6 +261,9 @@ export default function Home() {
     );
   }
 
+  // ==========================================
+  // B端 工作台
+  // ==========================================
   if (currentView === 'b_workspace') {
     return (
       <main className="h-screen flex flex-col bg-[#f8f9fa] overflow-hidden">
@@ -188,14 +275,14 @@ export default function Home() {
               <span className="px-3 py-1.5 bg-gray-100 rounded-md">评估池: {bFiles.length} 人</span>
             </div>
           </div>
-          <button onClick={() => setCurrentView('b_input')} className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">重新导入批次</button>
+          <button onClick={() => setCurrentView('b_input')} className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">修改配置并重评</button>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
           <div className="w-full">
             <div className="mb-8 pl-2">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">智能人才匹配池</h1>
-              <p className="text-base text-gray-500">基于最新 JD 深度扫描。高匹配度候选人已为您置顶排序。</p>
+              <p className="text-base text-gray-500">已基于您设定的专属维度（{dimensions.map(d=>d.name).join('、')}）进行深度扫描。</p>
             </div>
 
             {isLoading ? (
@@ -228,10 +315,10 @@ export default function Home() {
 
                     {candidate.dimensions && candidate.dimensions.length > 0 && (
                       <div className="mb-8 pb-6 border-b border-gray-100">
-                        <div className="text-sm font-bold text-gray-400 mb-5 uppercase tracking-wider">能力雷达拆解</div>
+                        <div className="text-sm font-bold text-gray-400 mb-5 uppercase tracking-wider">能力雷达拆解 (自定义)</div>
                         <div className="grid grid-cols-2 gap-x-8 gap-y-5">
                           {candidate.dimensions.map((dim: any, dIdx: number) => {
-                            const maxScore = parseInt(dim.weight.replace(/\D/g, '')) || 100;
+                            const maxScore = parseInt(dim.weight?.toString().replace(/\D/g, '')) || 100;
                             const percent = Math.min(100, Math.max(0, (dim.score / maxScore) * 100));
                             return (
                               <div key={dIdx} className="flex flex-col gap-2">
@@ -294,6 +381,9 @@ export default function Home() {
     );
   }
 
+  // ==========================================
+  // C端 工作台 (保持不变)
+  // ==========================================
   return (
     <main className="h-screen flex flex-col bg-[var(--bg-app)] overflow-hidden">
       <header className="flex-none h-16 border-b border-[var(--border-color)] bg-[var(--surface)] flex items-center justify-between px-6 shrink-0">
