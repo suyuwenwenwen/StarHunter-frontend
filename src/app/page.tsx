@@ -4,10 +4,10 @@ import ReactMarkdown from 'react-markdown';
 
 // ==========================================
 // 全局 API 地址配置
-// 默认本地开发（localhost:8000）；
-// 部署时在 Vercel 环境变量中设置 NEXT_PUBLIC_API_BASE 为线上后端地址即可覆盖。
+// 默认指向 Render 上部署的线上后端；
+// 本地开发如需连本机后端，可设置环境变量 NEXT_PUBLIC_API_BASE=http://localhost:8000 覆盖。
 // ==========================================
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://starhunter-backend.onrender.com';
 
 // ==========================================
 // 极简单色 SVG 图标库
