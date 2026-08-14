@@ -3,9 +3,11 @@ import { useState, FormEvent, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 // ==========================================
-// 全局 API 地址配置 (回归本地！！！)
+// 全局 API 地址配置
+// 默认本地开发（localhost:8000）；
+// 部署时在 Vercel 环境变量中设置 NEXT_PUBLIC_API_BASE 为线上后端地址即可覆盖。
 // ==========================================
-const API_BASE = 'http://localhost:8000'; 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
 
 // ==========================================
 // 极简单色 SVG 图标库
