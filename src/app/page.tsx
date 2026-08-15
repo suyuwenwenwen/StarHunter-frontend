@@ -34,6 +34,7 @@ export default function Home() {
   const [pdfBase64, setPdfBase64] = useState("");
   const [input, setInput] = useState("");
   const [cFileName, setCFileName] = useState("");
+  const [cError, setCError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 模板与排版设置（C 端）
@@ -62,14 +63,39 @@ export default function Home() {
     if (!e.target.files?.[0]) return;
     const file = e.target.files[0];
     setCFileName(file.name);
+    setCError("");
     setIsLoading(true); setStatusText("正在解析简历框架...");
     const formData = new FormData(); formData.append("file", file);
     try {
-      const res = await fetch(`${API_BASE}/api/extract`, { method: "POST", body: formData });
+      // Render 免费实例会休眠，首次请求可能因冷启动失败/超时，自动重试一次
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          res = await fetch(`${API_BASE}/api/extract`, { method: "POST", body: formData });
+          if (res.ok) break;
+        } catch (err) {
+          if (attempt === 1) throw err;
+          setStatusText("后端正在唤醒，正在重试解析...");
+          await new Promise(r => setTimeout(r, 2500));
+        }
+      }
+      if (!res || !res.ok) throw new Error(`解析请求失败（HTTP ${res?.status ?? "无响应"}）`);
       const { data } = await res.json();
-      setResumeData(data); setStatusText("正在生成基础排版..."); await compilePdf(data);
-    } catch (err) { console.error(err); }
-    setIsLoading(false); setStatusText("");
+      if (!data || Object.keys(data).length === 0) {
+        setResumeData({});
+        setCError("未能从这份 PDF 中解析出内容：请确认是文字版简历（图片/扫描件请先转成文字或做 OCR）后重新上传。");
+        return;
+      }
+      setResumeData(data);
+      setStatusText("正在生成基础排版...");
+      await compilePdf(data);
+    } catch (err) {
+      console.error(err);
+      setResumeData({});
+      setCError("简历解析失败：无法连接后端或后端暂时不可用（首次请求可能较慢）。请稍后点击上方区域重新上传重试。");
+    } finally {
+      setIsLoading(false); setStatusText("");
+    }
   };
 
   const startCDiagnose = async () => {
@@ -281,6 +307,12 @@ export default function Home() {
                 <input type="file" accept="application/pdf" multiple={isB} className="hidden" onChange={isB ? handleBFileUpload : handleCFileUpload} />
               </label>
             </div>
+
+            {!isB && cError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 leading-relaxed">
+                ⚠️ {cError}
+              </div>
+            )}
             
             <button 
               onClick={isB ? startBEvaluate : startCDiagnose} 
@@ -289,6 +321,12 @@ export default function Home() {
             >
               {isLoading ? <span className="animate-pulse">{statusText}</span> : <>{isB ? <BriefcaseIcon /> : <SparkleIcon />} {isB ? "开启多维批量评估" : "开启深度诊断"}</>}
             </button>
+
+            {!isB && (
+              <p className="text-xs text-center text-[var(--text-muted)] leading-relaxed -mt-2">
+                {!jd ? "👆 请先填写上方的目标岗位 JD" : Object.keys(resumeData).length === 0 ? (cFileName ? (cError ? "⚠️ 简历解析未成功，请按提示重新上传" : "简历解析中...") : "👆 请先上传一份 PDF 简历") : "✅ 简历已就绪，点击开始深度诊断"}
+              </p>
+            )}
           </div>
         </div>
       </main>
