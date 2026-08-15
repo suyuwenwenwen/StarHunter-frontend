@@ -36,6 +36,11 @@ export default function Home() {
   const [cFileName, setCFileName] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 模板与排版设置（C 端）
+  const [template, setTemplate] = useState(1);       // 1/2/3
+  const [fontSize, setFontSize] = useState(10);      // pt
+  const [lineSpacing, setLineSpacing] = useState(1.0); // em 倍数
+
   const [bFiles, setBFiles] = useState<File[]>([]);
   const [bCandidates, setBCandidates] = useState<any[]>([]);
 
@@ -81,13 +86,28 @@ export default function Home() {
     setIsLoading(false); setStatusText("");
   };
 
-  const compilePdf = async (data: any) => {
+  const compilePdf = async (data: any, opts?: { template?: number; font_size?: number; line_spacing?: number }) => {
     try {
       const res = await fetch(`${API_BASE}/api/compile`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resume_data: data })
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume_data: data,
+          template: opts?.template ?? template,
+          font_size: opts?.font_size ?? fontSize,
+          line_spacing: opts?.line_spacing ?? lineSpacing
+        })
       });
       const { pdf_base64 } = await res.json(); setPdfBase64(pdf_base64);
     } catch (err) { console.error(err); }
+  };
+
+  // 排版设置变更时立即重编译（用显式参数避免 state 异步滞后）
+  const applyLayout = (t?: number, f?: number, l?: number) => {
+    const nt = t ?? template, nf = f ?? fontSize, nl = l ?? lineSpacing;
+    if (t !== undefined) setTemplate(t);
+    if (f !== undefined) setFontSize(f);
+    if (l !== undefined) setLineSpacing(l);
+    if (Object.keys(resumeData).length > 0) compilePdf(resumeData, { template: nt, font_size: nf, line_spacing: nl });
   };
 
   const sendCMessage = async (e: FormEvent) => {
@@ -224,6 +244,29 @@ export default function Home() {
                   >
                     <PlusIcon /> 添加新维度
                   </button>
+                </div>
+              </div>
+            )}
+
+            {!isB && (
+              <div>
+                <label className="block text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">选择简历模板</label>
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    { id: 1, name: "经典简约", img: "/templates/template1.png" },
+                    { id: 2, name: "居中现代", img: "/templates/template2.png" },
+                    { id: 3, name: "侧栏商务", img: "/templates/template3.png" },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTemplate(t.id)}
+                      className={`relative rounded-xl overflow-hidden border-2 transition-all text-left ${template === t.id ? 'border-[var(--primary)] ring-4 ring-[var(--primary)]/20' : 'border-gray-200 hover:border-gray-400'}`}
+                    >
+                      <img src={t.img} alt={t.name} className="w-full h-40 object-cover object-top" />
+                      <span className={`absolute bottom-0 inset-x-0 text-white text-xs font-bold py-1.5 text-center ${template === t.id ? 'bg-[var(--primary)]' : 'bg-black/60'}`}>{t.name}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -382,6 +425,39 @@ export default function Home() {
         </div>
         <button onClick={() => setCurrentView('c_input')} className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors">重新配置环境</button>
       </header>
+
+      {/* 排版设置工具栏 */}
+      <div className="flex-none bg-[var(--surface)] border-b border-[var(--border-color)] px-6 py-2.5 flex items-center gap-5 flex-wrap shrink-0">
+        <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">排版设置</span>
+        <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          模板
+          <select value={template} onChange={(e) => applyLayout(Number(e.target.value))} className="px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-[var(--text-main)]">
+            <option value={1}>经典简约</option>
+            <option value={2}>居中现代</option>
+            <option value={3}>侧栏商务</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          字号
+          <select value={fontSize} onChange={(e) => applyLayout(undefined, Number(e.target.value))} className="px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-[var(--text-main)]">
+            <option value={8}>小 (8pt)</option>
+            <option value={9}>偏小 (9pt)</option>
+            <option value={10}>标准 (10pt)</option>
+            <option value={11}>偏大 (11pt)</option>
+            <option value={12}>大 (12pt)</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          行距
+          <select value={lineSpacing} onChange={(e) => applyLayout(undefined, undefined, Number(e.target.value))} className="px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-[var(--text-main)]">
+            <option value={0.85}>紧凑</option>
+            <option value={1.0}>标准</option>
+            <option value={1.15}>宽松</option>
+            <option value={1.3}>超宽松</option>
+          </select>
+        </label>
+        <span className="ml-auto text-xs text-[var(--text-muted)]">调整模板 / 字号 / 行距，让简历排版饱满不空白</span>
+      </div>
 
       <div className="flex-1 flex overflow-hidden">
         <section className="w-full md:w-1/2 flex flex-col bg-[var(--bg-app)] border-r border-[var(--border-color)]">
