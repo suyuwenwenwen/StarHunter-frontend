@@ -22,6 +22,19 @@ const BackIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
 const MinusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
+const PhotoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>;
+
+// 可手动补充/覆盖的个人信息字段（一般国内简历必备）
+const PERSONAL_FIELDS: { key: string; label: string; placeholder: string }[] = [
+  { key: "GENDER", label: "性别", placeholder: "男 / 女" },
+  { key: "BIRTH_YEAR", label: "出生年份", placeholder: "2000" },
+  { key: "POLITICAL", label: "政治面貌", placeholder: "中共党员 / 共青团员 / 群众" },
+  { key: "ORIGIN", label: "籍贯/生源地", placeholder: "浙江杭州" },
+  { key: "LOCATION", label: "现居地", placeholder: "上海" },
+  { key: "GRAD_YEAR", label: "毕业年份", placeholder: "2022" },
+  { key: "PHONE", label: "电话", placeholder: "138-0000-0000" },
+  { key: "EMAIL", label: "邮箱", placeholder: "you@example.com" },
+];
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<'landing' | 'c_input' | 'c_workspace' | 'b_input' | 'b_workspace'>('landing');
@@ -36,6 +49,11 @@ export default function Home() {
   const [cFileName, setCFileName] = useState("");
   const [cError, setCError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 证件照与个人信息（C 端）
+  const [photoBase64, setPhotoBase64] = useState("");           // data URL
+  const [personalInfo, setPersonalInfo] = useState<Record<string, string>>({});
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
 
   // 模板与排版设置（C 端）
   const [template, setTemplate] = useState(1);       // 1/2/3
@@ -112,20 +130,99 @@ export default function Home() {
     setIsLoading(false); setStatusText("");
   };
 
-  const compilePdf = async (data: any, opts?: { template?: number; font_size?: number; line_spacing?: number }) => {
+  // 合并手动补充的个人信息（用户填写的优先）
+  const mergedResumeData = (data: any = resumeData) => {
+    const out = { ...data };
+    Object.entries(personalInfo).forEach(([k, v]) => { if (v !== undefined) out[k] = v; });
+    return out;
+  };
+
+  // 输入框显示值：用户填过就用用户的，否则用简历里解析出来的
+  const personalValue = (key: string) => {
+    const v = personalInfo[key];
+    if (v !== undefined) return v;
+    return resumeData[key] ?? "";
+  };
+
+  const compilePdf = async (data: any, opts?: { template?: number; font_size?: number; line_spacing?: number; photo_base64?: string | null }) => {
     try {
       const res = await fetch(`${API_BASE}/api/compile`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          resume_data: data,
+          resume_data: mergedResumeData(data),
           template: opts?.template ?? template,
           font_size: opts?.font_size ?? fontSize,
-          line_spacing: opts?.line_spacing ?? lineSpacing
+          line_spacing: opts?.line_spacing ?? lineSpacing,
+          photo_base64: opts?.photo_base64 !== undefined ? opts.photo_base64 : (photoBase64 || null)
         })
       });
       const { pdf_base64 } = await res.json(); setPdfBase64(pdf_base64);
     } catch (err) { console.error(err); }
   };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result || "");
+      setPhotoBase64(url);
+      if (Object.keys(resumeData).length > 0) compilePdf(resumeData, { photo_base64: url });
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const removePhoto = () => {
+    setPhotoBase64("");
+    if (Object.keys(resumeData).length > 0) compilePdf(resumeData, { photo_base64: null });
+  };
+
+  const handlePersonalChange = (key: string, value: string) => {
+    setPersonalInfo(prev => ({ ...prev, [key]: value }));
+  };
+
+  const commitPersonalInfo = () => {
+    if (Object.keys(resumeData).length > 0) compilePdf(resumeData);
+  };
+
+  // 证件照 + 个人信息面板（上传页与工作台共用）
+  const personalPanel = (
+    <div className="flex flex-col md:flex-row gap-6">
+      {/* 证件照 */}
+      <div className="flex flex-col items-center gap-2 shrink-0">
+        <div className="w-[100px] h-[140px] rounded-lg border-2 border-dashed border-gray-300 bg-white overflow-hidden flex items-center justify-center">
+          {photoBase64 ? (
+            <img src={photoBase64} alt="证件照" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-xs text-gray-400 text-center leading-5">蓝底<br />一寸照</span>
+          )}
+        </div>
+        <label className="cursor-pointer text-xs font-bold text-[var(--primary)] hover:underline">
+          {photoBase64 ? "更换照片" : "上传证件照"}
+          <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+        </label>
+        {photoBase64 && (
+          <button type="button" onClick={removePhoto} className="text-xs text-gray-400 hover:text-red-500 transition-colors">移除照片</button>
+        )}
+      </div>
+      {/* 个人信息 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 flex-1">
+        {PERSONAL_FIELDS.map(f => (
+          <label key={f.key} className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-[var(--text-muted)] w-[68px] shrink-0 text-right">{f.label}</span>
+            <input
+              type="text"
+              value={personalValue(f.key)}
+              onChange={(e) => handlePersonalChange(f.key, e.target.value)}
+              onBlur={commitPersonalInfo}
+              placeholder={f.placeholder}
+              className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
 
   // 排版设置变更时立即重编译（用显式参数避免 state 异步滞后）
   const applyLayout = (t?: number, f?: number, l?: number) => {
@@ -136,15 +233,15 @@ export default function Home() {
     if (Object.keys(resumeData).length > 0) compilePdf(resumeData, { template: nt, font_size: nf, line_spacing: nl });
   };
 
-  const sendCMessage = async (e: FormEvent) => {
-    e.preventDefault(); if (!input.trim()) return;
+  const sendCMessage = async (e?: FormEvent) => {
+    e?.preventDefault(); if (!input.trim()) return;
     const newMsgs = [...messages, { role: "user", content: input }];
     setMessages(newMsgs); setInput("");
     setIsLoading(true); setStatusText("正在注入策略并重绘排版...");
     try {
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMsgs, resume_data: resumeData, jd_input: jd })
+        body: JSON.stringify({ messages: newMsgs, resume_data: mergedResumeData(), jd_input: jd })
       });
       const data = await res.json(); setMessages([...newMsgs, { role: "assistant", content: data.reply }]);
       if (data.updated_fields && Object.keys(data.updated_fields).length > 0) {
@@ -294,6 +391,18 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {!isB && (
+              <div className="bg-gray-50 rounded-2xl border border-gray-200 p-6">
+                <button type="button" onClick={() => setShowInfoPanel(v => !v)} className="w-full flex items-center justify-between gap-4">
+                  <span className="text-sm font-semibold text-[var(--text-main)] uppercase tracking-wider flex items-center gap-2">
+                    <PhotoIcon /> 证件照与个人信息（可选，国内简历建议填写）
+                  </span>
+                  <span className="text-xs font-bold text-[var(--primary)] shrink-0">{showInfoPanel ? "收起 ▲" : "展开 ▼"}</span>
+                </button>
+                {showInfoPanel && <div className="mt-6">{personalPanel}</div>}
               </div>
             )}
 
@@ -494,8 +603,17 @@ export default function Home() {
             <option value={1.3}>超宽松</option>
           </select>
         </label>
+        <button type="button" onClick={() => setShowInfoPanel(v => !v)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${showInfoPanel ? 'bg-[var(--primary)] text-white border-[var(--primary)]' : 'bg-white text-[var(--text-muted)] border-gray-200 hover:border-[var(--primary)] hover:text-[var(--primary)]'}`}>
+          <PhotoIcon /> 证件照 / 个人信息
+        </button>
         <span className="ml-auto text-xs text-[var(--text-muted)]">调整模板 / 字号 / 行距，让简历排版饱满不空白</span>
       </div>
+
+      {showInfoPanel && (
+        <div className="flex-none bg-[var(--surface)] border-b border-[var(--border-color)] px-6 py-4 shrink-0">
+          {personalPanel}
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         <section className="w-full md:w-1/2 flex flex-col bg-[var(--bg-app)] border-r border-[var(--border-color)]">
@@ -532,10 +650,21 @@ export default function Home() {
             <div ref={messagesEndRef} />
           </div>
           <form onSubmit={sendCMessage} className="shrink-0 p-4 bg-[var(--surface)] border-t border-[var(--border-color)]">
-            <div className="relative flex items-center">
-              <input type="text" value={input} onChange={(e) => setInput(e.target.value)} disabled={isLoading} placeholder="输入补充细节或选择风格..." className="w-full p-4 pr-16 rounded-xl border border-[var(--border-color)] bg-transparent focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 transition-all text-base" />
-              <button type="submit" disabled={!input.trim() || isLoading} className="absolute right-2 w-12 h-12 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center"><SendIcon /></button>
+            <div className="relative">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendCMessage(); }
+                }}
+                rows={3}
+                disabled={isLoading}
+                placeholder="输入补充细节或选择风格...（Enter 发送，Shift + Enter 换行）"
+                className="w-full p-4 pr-16 rounded-xl border border-[var(--border-color)] bg-transparent focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 transition-all text-base leading-relaxed resize-none min-h-[96px] max-h-64 overflow-y-auto custom-scrollbar"
+              />
+              <button type="submit" disabled={!input.trim() || isLoading} className="absolute right-3 bottom-3 w-11 h-11 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center"><SendIcon /></button>
             </div>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">内容较长时可在框内用鼠标滚轮上下滚动查看；Enter 发送，Shift + Enter 换行</p>
           </form>
         </section>
 
