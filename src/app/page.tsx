@@ -32,6 +32,7 @@ const PERSONAL_FIELDS: { key: string; label: string; placeholder: string }[] = [
   { key: "ORIGIN", label: "籍贯/生源地", placeholder: "浙江杭州" },
   { key: "LOCATION", label: "现居地", placeholder: "上海" },
   { key: "GRAD_YEAR", label: "毕业年份", placeholder: "2022" },
+  { key: "EDU_MAJOR", label: "专业", placeholder: "语言学 + 人工智能" },
   { key: "PHONE", label: "电话", placeholder: "138-0000-0000" },
   { key: "EMAIL", label: "邮箱", placeholder: "you@example.com" },
 ];
